@@ -1,0 +1,1 @@
+nunit-console bin\Release\VRVis.Vgm.Tests.dll /noxml /basepath=bin\Release

@@ -1,0 +1,481 @@
+﻿namespace InteractiveShapeDetection.Base
+
+[<AutoOpen>]
+module OctreeExtensions =
+    open System
+    open System.Diagnostics
+    open Aardvark.Base
+    open Aardvark.Base.Monads.Option
+    open Aardvark.Base.Native
+    open Aardvark.Base.Rendering
+    open Aardvark.Base.Incremental
+    open Aardvark.Rendering.NanoVg
+    open Aardvark.Base.Ag
+    open Aardvark.SceneGraph
+    open Aardvark.Application
+    open Aardvark.Application.WinForms
+    open Aardvark.SceneGraph.Semantics
+    open System.IO
+    open System.Threading
+    open Aardvark.Git
+    open Aardvark.Database
+    open Aardvark.VRVis
+
+    open InteractiveShapeDetection
+    
+
+    
+    type Point with
+        member x.ToNDC(viewProjTrafo: Trafo3d) = 
+            let p = viewProjTrafo.Forward.TransformPosProj(x.Position)
+            p
+
+    [<AutoOpen>]
+    module UnsafeOperators = 
+        let private (:=) (r : thunk<'a>) (v : 'a) =
+                (unbox<dbref<'a>> r).Value <- v
+    
+
+
+    type OctreeNode with
+
+        // Computes the averaged distance of each point to its closest neighbor
+       static member ComputeAverageClosestDistance (x: OctreeNode) =
+            
+            let positions   = x.Points.GetValue() |> Array.map (fun p -> p.Position)
+            
+            if positions |> Array.length = 0 then 
+                0.0
+            else
+                let data        = x.KdTreeData.GetValue()
+                let kdTree      = RkDTree.CreateFromData positions data     
+                positions |> Array.averageBy(fun p -> kdTree.GetClosest(p, Double.MaxValue,2).[0].Dist)
+        
+        // Returns the Positions of the points of the node
+        member x.Positions() = 
+            x.Points.Value |> Array.map (fun p -> p.Position)
+
+        // Returns the Colors of the points of the node
+        member x.Colors() = 
+            x.Points.Value |> Array.map (fun p -> p.Color)
+
+        // Returns the Normals of the points of the node
+        member x.Normals() = 
+            x.Points.Value |> Array.map (fun p -> p.Normal)
+
+        // Returns the Positions, Normals and Colors of the points of the Node
+        member x.Attributes() =
+            x.Points.Value  |> Array.map (fun p -> p.Position, p.Normal, p.Color)  
+                            |> Array.unzip3 
+        
+
+        member x.GetPointsForPrimitive(shape : InteractiveShapeDetection.Base.PrimitiveShape) = 
+            match x.DetectedPrimitives.Value with
+            | None -> [||]
+            | Some primitives -> 
+                let index   = Array.IndexOf  (primitives, shape)
+                let points  = x.Points.Value |> Array.filter (fun p -> match p.Primitive with
+                                                                        | None -> false
+                                                                        | Some i -> index = i
+                                                            )
+                points
+
+
+        static member filter(f1 : (Point -> bool))(f2 : (InteractiveShapeDetection.Base.PrimitiveShape -> bool))(node : OctreeNode) = 
+            
+            let db = node.Store
+            let points  = node.Points.Value |> Array.filter f1
+            
+            let shapes  = 
+                match node.DetectedPrimitives.Value with
+                | Some s    -> s |> Array.filter f2 |> Some 
+                | None      -> None
+                
+            
+            let pos     = points |> Array.map (fun p -> p.Position)  
+            let data    = 
+                match pos with
+                | [||]  -> RkDTree.EmptyV3d().Data
+                | _     -> (pos.CreateRkdTreeDist2 (1e-6)).Data
+            
+            let node = node |> OctreeNode.setPoints points
+                            |> OctreeNode.setShapes shapes
+            node
+           
+          
+            
+        
+        static member copy(node : OctreeNode) = 
+
+            let rec traverse (node : OctreeNode)= 
+                match node with
+                | Empty     ->  null
+                | Leaf _    ->  OctreeNode(node)
+                | Node _    ->                            
+                                let childCopies = node.Children |> Array.map (fun c ->  c |> Value.map (traverse))
+                                OctreeNode(node) |> OctreeNode.setChildren childCopies
+            
+            traverse node
+
+   
+        static member findChildren(cell : GridCell) (depth : int)(node : OctreeNode) = 
+            
+            let nodes = CSet.empty
+            // Collect all nodes except the first node (count = 0
+            let rec traverse (node : OctreeNode)(cell: GridCell )(path: int[]) (count : int)  =   
+                        
+                match count > depth, node with
+                | true , _  -> ()
+                | false, Empty      ->  ()
+                | false, Leaf _     ->  if count > 0 then nodes |> CSet.add (node, cell, path) |> ignore
+                | false, Node(_,_)  ->  if count > 0 then nodes |> CSet.add (node, cell, path) |> ignore
+                                        node.Children |> Array.iteri (fun i child -> traverse (child.Value) (cell.GetChild i) (Array.append path [|i|]) (count + 1))                         
+            
+            traverse node cell [||] 0
+            nodes |> CSet.toArray
+
+        
+        static member hasPrimitiveShapes (node : OctreeNode) = Option.isSome node.DetectedPrimitives.Value
+
+ 
+
+
+    module Octree =
+        
+        let depth' (octree : Octree) = 
+
+            let rec traverse (node : OctreeNode) = 
+                match node with
+                | Leaf _    ->  0
+                | Empty     ->  0
+                | Node (_,_)->  let level = node.Children   |> Array.map(fun child -> traverse child.Value)
+                                                            |> Array.max
+                                level + 1
+
+            traverse octree.root.Value
+
+
+        // Octree A is larger than octree B
+        // Diff finds the nodes in A that are not in B up to a certain depth beyond the horizon of B
+        let diff (octreeA : Octree)(octreeB : Octree)(depth :int)   = 
+
+            let d1 = depth' octreeA
+            let d2 = depth' octreeB
+            
+
+            let leaves = CSet.empty
+
+            
+
+            let rec traverse (node1 : OctreeNode)(cell1: GridCell )(path: int[]) (node2 : OctreeNode)(d: int) =  
+                
+                if d > 0 then 
+                    
+                    match node1, node2 with
+                    | Node(_,_), Node(_,_)  ->  node1.Children |> Array.iteri (fun i child -> traverse (child.Value) (cell1.GetChild i) (Array.append path [|i|]) (node2.Children.[i].Value)(d))
+                                            
+                    | Node(_,_), Leaf _     ->  node1.Children |> Array.iteri (fun i child -> traverse (child.Value) (cell1.GetChild i) (Array.append path [|i|]) (null) (d))
+                                            
+                    | Node(_,_), Empty      ->  node1.Children |> Array.iteri (fun i child -> traverse (child.Value) (cell1.GetChild i) (Array.append path [|i|]) (null) (d - 1))
+                                                leaves |> CSet.add (node1, cell1, path) |> ignore
+                    | Leaf _, Empty         ->  
+                                                leaves |> CSet.add (node1, cell1, path) |> ignore  
+                    | _,_ -> ()       
+            
+
+            traverse (octreeA.root.Value) (octreeA.cell) [||] (octreeB.root.Value) depth
+
+            let nodes = leaves  |> CSet.toArray
+            
+            nodes                      
+                
+                
+            
+        // Maps each node of the octree using the given function and returns an array consisting of the mapped elements
+        let map (f : OctreeNode -> GridCell -> int[] -> 'T) (tree : Octree) = 
+
+            let mutable nodes = []
+            // Traverses the tree
+            let rec traverse (node : OctreeNode) (cell: GridCell) (path : int list)  =                     
+                match node with
+                | Empty         ->  ()
+                | Leaf _        ->  nodes <- (f node cell (path |> List.toArray)) :: nodes                                                          
+                | Node (_,_)    ->  node.Children   |> Array.iteri(fun i child -> traverse (child.Value) (cell.GetChild i) (List.append path [i]))
+                                    nodes <- (f node cell (path |> List.toArray)) :: nodes      
+                                                                                                                                                 
+            traverse tree.root.Value tree.cell [] 
+
+            nodes |> List.toArray 
+
+
+        // Returns all nodes of the octree as an array
+        let flatten (tree: Octree) = 
+            tree |> map (fun node cell path -> (node, cell, path))
+
+
+
+        let copy (octree : Octree) = 
+            let splitCount  = octree.splitCount
+            let pointCount  = octree.pointCount;
+            let store       = octree.store;
+           
+            let bounds  = octree.bounds
+            let cell    = octree.cell
+            let root    = octree.root |> Value.map (OctreeNode.copy)           
+  
+            {
+                offset      = octree.offset 
+                splitCount  = octree.splitCount
+                pointCount  = octree.pointCount
+                store       = octree.store;
+                root        = root
+                bounds      = octree.bounds
+                cell        = octree.cell
+            }
+
+
+
+        
+        // Filters the octree and returns a new (pruned) octree
+        // Nodes that should be filtered, but their children are traversed are returned as nodes with no content except their children
+        let filter (useNode : OctreeNode -> GridCell -> int [] -> bool*bool) (tree: Octree)= 
+            
+
+            let db = tree.store
+            // Traverses the tree
+            let rec traverse (t : thunk<OctreeNode>) (cell: GridCell) (path : int[]) : thunk<OctreeNode> =
+                let node = t.Value
+                
+                   
+                match node with
+                | Empty     ->  t
+                | Leaf _    ->  let useNode, _ = useNode node cell path
+                                match useNode with
+                                | true  -> t
+                                | false -> db.Ref Empty :> thunk<_>
+                                                                          
+                | Node (_,children) ->   
+                                let useNode, traverseChildren = useNode node cell path    
+
+                                match useNode , traverseChildren with
+                                | false, false  ->  tree.store.Ref Empty :> thunk<_>
+                                | false, true   ->  let children = 
+                                                        node.Children   |> Array.mapi   (fun i child -> 
+                                                                                            let node = traverse (child) (cell.GetChild i) (Array.append path [|i|])
+                                                                                            match node.Value with 
+                                                                                            | Empty -> db.Ref Empty :> thunk<_>
+                                                                                            | _     -> child
+                                                                                        )
+                                                    match (node.Children |> Array.length = 0 ) || Array.TrueForAll(children, (fun child -> isNull (child.Value))) with
+                                                    | true  -> db.Ref Empty :> thunk<_>
+                                                    | false ->  db |> Proxy  |> OctreeNode.setChildren node.Children |> db.Ref:> thunk<_>
+                                                                  
+                                | true, false   ->  node |> OctreeNode.setChildren null |> db.Ref  :> thunk<_>
+
+                                | true, true    ->  let children = node.Children    |> Array.mapi(fun i child -> traverse (child) (cell.GetChild i) (Array.append path [|i|]))
+                                                    
+                                                    let children = 
+                                                        if Array.TrueForAll(children, (fun child -> child.Value |> isNull)) then 
+                                                            null        
+                                                        else
+                                                            children      
+                                                            
+                                                    db.Ref (node |> OctreeNode.setChildren children) :> thunk<_>                                     
+
+                                                                                 
+            let root = traverse tree.root tree.cell [||]
+
+            let tree = 
+                {
+                offset      = tree.offset
+                splitCount  = tree.splitCount
+                pointCount  = tree.pointCount
+                store       = tree.store
+                root        = root
+                bounds      = tree.bounds
+                cell        = tree.cell
+                } 
+           
+            tree                                                                              
+        
+
+
+        let choose (decisionFun : OctreeNode -> GridCell -> int[] -> Option<'T * bool>) = 
+            
+            let nodes = CSet.empty
+
+            let rec traverse (node : OctreeNode) (cell: GridCell) (path : int list)=
+                       
+                match node with
+                | Empty             -> ()
+                | Leaf _            -> 
+                                let t = decisionFun node cell (path |> List.toArray)
+
+                                
+                                match t with
+                                | None -> ()
+                                | Some t-> nodes |> CSet.add t |> ignore
+                                | true  -> 
+                                | false -> ()
+
+                                                                           
+                | Node (_,children) ->   
+                                let t = map node cell path  
+                                let useT, traverseChildren = useT t
+
+                                match useT,traverseChildren with
+                                | false, false  -> ()
+                                | false, true   ->  node.Children   |> Array.iteri(fun i child -> traverse (child.Value) (cell.GetChild i) (List.append path [i]))
+                                                                    
+                                | true, false   ->  nodes |> CSet.add t |> ignore
+                                | true, true    ->  
+                                                    node.Children    |> Array.iteri(fun i child -> traverse (child.Value) (cell.GetChild i) (List.append path [i]))
+                                                    nodes |> CSet.add t |> ignore
+                                                                                 
+            traverse tree.root.Value tree.cell []          
+
+            nodes |> CSet.toArray
+
+        // Filters all nodes that match the given criteria: 
+        // 'T ..... The type that is created from an OctreeNode
+        // map .... Maps the OctreeNode, cell and path to and instance of 'T 
+        // useT ... Decision function: Returns as first element whether the current 'T should be filtered and as second whether the children should be traversed
+        let filterMap (map : OctreeNode -> GridCell -> int list -> 'T) (useT : 'T -> bool*bool) (tree: Octree): 'T[]= 
+            
+            let nodes = CSet.empty
+            let rec traverse (node : OctreeNode) (cell: GridCell) (path : int list)=
+                       
+                match node with
+                | Empty             -> ()
+                | Leaf _            -> 
+                                let t = map node cell path
+
+                                let useT, traverseChildren = useT t
+                                match useT with
+                                | true  -> nodes |> CSet.add t |> ignore
+                                | false -> ()
+
+                                                                           
+                | Node (_,children) ->   
+                                let t = map node cell path  
+                                let useT, traverseChildren = useT t
+
+                                match useT,traverseChildren with
+                                | false, false  -> ()
+                                | false, true   ->  node.Children   |> Array.iteri(fun i child -> traverse (child.Value) (cell.GetChild i) (List.append path [i]))
+                                                                    
+                                | true, false   ->  nodes |> CSet.add t |> ignore
+                                | true, true    ->  
+                                                    node.Children    |> Array.iteri(fun i child -> traverse (child.Value) (cell.GetChild i) (List.append path [i]))
+                                                    nodes |> CSet.add t |> ignore
+                                                                                 
+            traverse tree.root.Value tree.cell []          
+
+            nodes |> CSet.toArray
+
+
+        let Insert (newNode : OctreeNode)(path : int list)(keepChildren : bool)(t : Octree) = 
+
+            
+            let rec traverse (node : OctreeNode) (path : int list) =
+                
+                match path with
+                // end of path => position of the node
+                | []    ->  if keepChildren then 
+                                newNode |> OctreeNode.setChildren (node.Children) 
+                            else 
+                                newNode
+                // traverse the tree further, create new nodes for each visited node
+                | i::xi ->  
+                            let ithChild = traverse (node.Children.[i].Value) xi
+
+                            node.Children.[i] <- node.Store.Ref ithChild :> thunk<_>
+                            node |> OctreeNode.setChildren (node.Children)
+                           // OctreeNode(node.Count, node.Points, node.KdTreeData, node.Centroid, node.Density, node.Children, node.DetectedPrimitives, node.Store)
+            let root = traverse t.root.Value path           
+            //let root = 
+            //    match path with
+            //    | []    -> if keepChildren then  newNode 
+            //    | _     -> traverse t.root.Value path
+            
+            {
+                offset      = t.offset 
+                splitCount  = t.splitCount
+                pointCount  = t.pointCount
+                store       = t.store;
+                root        = t.store.Ref root
+                bounds      = t.bounds
+                cell        = t.cell
+            }
+
+        
+        let Empty(store : Database)(offset)(splitCount) = 
+            let cell = GridCell()
+            let bounds = cell.BoundingBox
+            {
+                offset      = offset 
+                splitCount  = splitCount
+                pointCount  = 0
+                store       = store;
+                root        = store.Ref null
+                bounds      = bounds
+                cell        = cell
+            }
+
+
+        let find (path : int[]) (octree : Octree) = 
+
+            let rec traverse (node : OctreeNode) (cell: GridCell)(path : int list) = 
+                match path, node with
+                | [], Empty         -> None
+                | [], _             -> Some (node, cell, path)
+                
+                | x::xs, Node(_,_)  -> option {
+                                            let! x = node.Children  |> Array.mapi(fun i child -> traverse (child.Value) (cell.GetChild i) (xs))
+                                                                    |> Array.tryFind(fun x -> Option.isSome x)
+                                            return x.Value
+                                        }                             
+                | _,_               -> None
+
+            traverse octree.root.Value octree.cell (path |> Array.toList)
+        
+
+        let ofPointset (filePath: string)(guid: Guid)(db : Database) =                     
+
+            let r = db.Get(guid)            
+            let pointset =
+
+                if r.HasValue then
+                    Log.startTimed "read"
+                    let t : Octree = !r
+                    Log.stop()
+
+                    printfn "tree : %A" t
+
+                    match t.root.Value with
+                        | null -> ()
+                        | node -> printfn "node: %A" node.Count
+
+                    t
+
+                else
+                    let file = filePath
+
+                    let cnt = Pts.approximatePointCount file
+                    let chunkSize = 1 <<< 20//1 <<< 16
+                    let points = Pts.readChunked chunkSize file
+
+                    Log.start "complete build"
+
+                    let off = V3d.Zero
+                    let tree = Octree.build db 5000 off (1 + cnt / chunkSize) points
+                    printfn "tree : %A" tree
+
+                    r := tree
+                    //db.Dispose()
+
+                    Log.stop()
+                    
+                    tree
+
+            pointset

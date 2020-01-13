@@ -1,0 +1,66 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "InteractiveShapeDetection.Base", "InteractiveShapeDetection.Base\InteractiveShapeDetection.Base.fsproj", "{A5B1E48A-4CEF-42BB-9200-5AB83DEE7543}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InteractiveShapeDetection.Concurrent", "InteractiveShapeDetection.Concurrent\InteractiveShapeDetection.Concurrent.csproj", "{D2851793-ABC0-41F6-9DF5-FB7C9C2FEA28}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "InteractiveShapeDetection.Extensions", "InteractiveShapeDetection.Extensions\InteractiveShapeDetection.Extensions.fsproj", "{DD45C930-AF67-4F43-AE0E-5C4B890AD964}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "InteractiveShapeDetection.Interaction", "InteractiveShapeDetection.Interaction\InteractiveShapeDetection.Interaction.fsproj", "{9B1A0C18-93D6-4E8E-9F98-B370784873EF}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "InteractiveShapeDetection.Visualization", "InteractiveShapeDetection.Visualization\InteractiveShapeDetection.Visualization.fsproj", "{70F145B3-58DF-4865-BF92-C799D54232C4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InteractiveShapeDetection.Tools.Converter", "InteractiveShapeDetection.Tools.Converter\InteractiveShapeDetection.Tools.Converter.csproj", "{3BB46870-A794-4E70-8DA0-2FF92F8C6A24}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "InteractiveShapeDetection.App", "InteractiveShapeDetection.App\InteractiveShapeDetection.App.fsproj", "{E751C36B-CE99-41D9-9C89-C550C6364AF8}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "InteractiveShapeDetection.Tools.Playground", "InteractiveShapeDetection.Tools.Playground\InteractiveShapeDetection.Tools.Playground.fsproj", "{E7A0888E-8529-461D-AF3B-8927E9B87D4D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A5B1E48A-4CEF-42BB-9200-5AB83DEE7543}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A5B1E48A-4CEF-42BB-9200-5AB83DEE7543}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A5B1E48A-4CEF-42BB-9200-5AB83DEE7543}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A5B1E48A-4CEF-42BB-9200-5AB83DEE7543}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D2851793-ABC0-41F6-9DF5-FB7C9C2FEA28}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D2851793-ABC0-41F6-9DF5-FB7C9C2FEA28}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D2851793-ABC0-41F6-9DF5-FB7C9C2FEA28}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D2851793-ABC0-41F6-9DF5-FB7C9C2FEA28}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DD45C930-AF67-4F43-AE0E-5C4B890AD964}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DD45C930-AF67-4F43-AE0E-5C4B890AD964}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DD45C930-AF67-4F43-AE0E-5C4B890AD964}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DD45C930-AF67-4F43-AE0E-5C4B890AD964}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9B1A0C18-93D6-4E8E-9F98-B370784873EF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9B1A0C18-93D6-4E8E-9F98-B370784873EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9B1A0C18-93D6-4E8E-9F98-B370784873EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9B1A0C18-93D6-4E8E-9F98-B370784873EF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{70F145B3-58DF-4865-BF92-C799D54232C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{70F145B3-58DF-4865-BF92-C799D54232C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{70F145B3-58DF-4865-BF92-C799D54232C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{70F145B3-58DF-4865-BF92-C799D54232C4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3BB46870-A794-4E70-8DA0-2FF92F8C6A24}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3BB46870-A794-4E70-8DA0-2FF92F8C6A24}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3BB46870-A794-4E70-8DA0-2FF92F8C6A24}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3BB46870-A794-4E70-8DA0-2FF92F8C6A24}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E751C36B-CE99-41D9-9C89-C550C6364AF8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E751C36B-CE99-41D9-9C89-C550C6364AF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E751C36B-CE99-41D9-9C89-C550C6364AF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E751C36B-CE99-41D9-9C89-C550C6364AF8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E7A0888E-8529-461D-AF3B-8927E9B87D4D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E7A0888E-8529-461D-AF3B-8927E9B87D4D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E7A0888E-8529-461D-AF3B-8927E9B87D4D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E7A0888E-8529-461D-AF3B-8927E9B87D4D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		EnterpriseLibraryConfigurationToolBinariesPathV6 = packages\EnterpriseLibrary.TransientFaultHandling.6.0.1304.0\lib\portable-net45+win+wp8;packages\EnterpriseLibrary.TransientFaultHandling.Data.6.0.1304.1\lib\NET45
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,38 @@
+framework: net45
+source https://vrvis.myget.org/F/aardvark/api/v3/index.json
+source https://vrvis.myget.org/F/aardvark_public/api/v3/index.json
+source https://api.nuget.org/v3/index.json
+
+nuget Aardvark.Application             ~> 2.7.5
+nuget Aardvark.Application.WinForms    ~> 2.7.5
+nuget Aardvark.Application.WinForms.GL ~> 2.7.5
+
+nuget Aardvark.Rendering.NanoVg    ~> 2.7.5
+nuget Aardvark.Rendering.Text      ~> 2.7.5
+nuget Aardvark.SceneGraph          ~> 2.7.5
+nuget Aardvark.SceneGraph.IO       ~> 2.7.5
+
+nuget Aardvark.Base                ~> 2.4.8
+nuget Aardvark.Base.Essentials     ~> 2.4.8
+nuget Aardvark.Base.FSharp         ~> 2.4.8
+nuget Aardvark.Base.Incremental    ~> 2.4.8
+
+nuget Aardvark.VRVis.Geometry      ~> 2.3.9
+nuget Aardvark.VRVis.Processing    ~> 2.3.9
+
+nuget FShade ~> 2.3.0
+
+nuget Aardvark.Git                 ~> 2.1.4
+
+nuget AssimpNet                    ~> 3.3.1
+nuget FsPickler                    ~> 3.1.0
+nuget FsPickler.Json               ~> 3.1.0
+nuget Newtonsoft.Json              ~> 8.0.2
+
+group Build
+content: none
+source https://api.nuget.org/v3/index.json
+source https://vrvis.myget.org/F/aardvark_public/api/v3/index.json
+
+github vrvis/Aardvark.Fake:standalone
+

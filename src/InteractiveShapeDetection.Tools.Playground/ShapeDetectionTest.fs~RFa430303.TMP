@@ -1,0 +1,179 @@
+﻿namespace InteractiveShapeDetection.Tools.Playground
+
+open System
+open Aardvark.Base
+open Aardvark.Base.Native
+open Aardvark.Base.Rendering
+open Aardvark.Base.Incremental
+open Aardvark.Rendering.NanoVg
+open Aardvark.Base.Ag
+open Aardvark.SceneGraph
+open Aardvark.Application
+open Aardvark.Application.WinForms
+open System.IO
+open Aardvark.Database
+open InteractiveShapeDetection.Base
+
+
+module ShapeDetectionTest =
+ 
+
+    open Aardvark.Base.CameraView
+    open Aardvark.Base.Frustum
+    open Aardvark.SceneGraph.AirState
+
+
+    let importPTS path = 
+        let points = File.ReadAllLines path
+
+        points |> Array.map(fun s -> 
+
+            let items = s.SplitOnWhitespace()
+            
+            let position    = V3d(Double.Parse(items.[0]), Double.Parse(items.[1]), Double.Parse(items.[2]))
+            let normal      = V3d.OOO
+            let color       = C4b(Int32.Parse(items.[0]), Int32.Parse(items.[1]), Int32.Parse(items.[2]), 255)
+            Point(position, normal, color)
+        )
+
+
+
+        
+    
+
+    let main argv = 
+
+        Ag.initialize()
+        Aardvark.Init()
+        
+
+        MBrace.FsPickler.FsPickler.DeclareSerializable<Aardvark.VRVis.PointRkdTreeDData>()
+        
+        MBrace.FsPickler.FsPickler.DeclareSerializable<Plane3d>()
+        MBrace.FsPickler.FsPickler.DeclareSerializable<Sphere3d>()
+        MBrace.FsPickler.FsPickler.DeclareSerializable<Cone3d>()
+        MBrace.FsPickler.FsPickler.DeclareSerializable<Cylinder3d>()
+        MBrace.FsPickler.FsPickler.DeclareSerializable<Torus3d>()
+        MBrace.FsPickler.FsPickler.DeclareSerializable<InteractiveShapeDetection.Base.PrimitiveShape>()
+
+//        let psp         = @"C:\Cache\Technologiezentrum_Teil1.pts"
+//        let storagePath = @"C:\Cache\vgmCache_technologiezentrum"
+
+                          
+//        let psp         = @"C:\Cache\JBs_Haus.pts"
+//        let storagePath = @"C:\Cache\JBs_Haus.pts.CacheBenchmark"
+//
+//
+        let psp         = @"D:\Cache\primitiveScene.pts"
+        let storagePath = @"D:\Cache\vgmCache_primitiveScene"
+//
+//
+//        let psp         = @"D:\Cache\dragon.pts"
+//        let storagePath = @"D:\Cache\vgmCache_dragon"
+
+
+//        let psp         = @"D:\Cache\kirche.pts"
+//        let storagePath = @"D:\Cache\vgmCache3"
+        
+        
+        let s       = Directory.CreateDirectory(storagePath)
+        let mem     = Memory.mapped (Path.combine [storagePath;"memory.mapped"]) //Memory.hglobal 0L //Memory.mapped (Path.combine [storagePath;"memory.mapped"])
+        let get i   = NewImpl.Memory.mapped (Path.combine [storagePath;sprintf "memory-chunk-%d.mapped" i]) //Memory.hglobal 0L //NewImpl.Memory.mapped (Path.combine [storagePath;sprintf "memory-chunk-%d.mapped" i])
+        let store   = new BlobStore(mem,get)
+        use db      = new Database(store)     
+        let guid = Guid("6f3fd114-f345-4e2d-b82c-2e7172ea6086")
+       
+        
+
+        let octree    = Octree.ofPointset psp guid db  |> Mod.init
+        
+
+        let nodes : ShapeDetection.CandidateNode[] = 
+            octree  |> Mod.force
+                    |> Octree.flatten
+                    |> Array.map (fun (node,cell,path) -> 
+                                    let candidateNode :ShapeDetection.CandidateNode = 
+                                        {
+                                        node                    = node 
+                                        cell                    = cell
+                                        path                    = path
+                                        distanceToFocalPlane    = 0.0
+                                        }
+                                    candidateNode
+                                    )
+        
+        let path = "C://Users/brainer/Desktop/benchmark.txt"
+        
+
+        let mutable stats = []
+
+        let task (numTask : int) (candidate : ShapeDetection.CandidateNode)(octree : Octree) = 
+            
+
+            let density = float32 candidate.node.Density.Value
+
+            let options : ShapeDetection.ShapeDetectionOptions = 
+                {
+                    Epsilon             = 1.0f * density
+                    BitmapThreshold     = 2.0f * density
+                    NormalsThreshold    = 0.9f
+                    MinimalSupport      = 250
+                    Probability         = 0.001f
+
+                    DetectPlanes    = true
+                    DetectCylinder  = false
+                    DetectCones     = false
+                    DetectSpheres   = false
+                    DetectTori      = false
+                }
+
+            let watch = new System.Diagnostics.Stopwatch()
+            watch.Start()
+            
+            let res, numShapes = 
+                match candidate |> ShapeDetection.CandidateNode.DetectPrimitiveShapes options with
+                | None                  -> octree, 0
+                | Some (shapes, points) -> 
+                    //let node = candidate.node   |> OctreeNode.setPoints points 
+                                             //   |> OctreeNode.setShapes (Some shapes)
+                    octree, shapes |> Array.length
+                    //(octree |> Octree.Insert node (candidate.path |> Array.toList)  true, shapes |> Array.length)
+
+            watch.Stop()
+            let x =  (candidate.path, candidate.node.Points.Value |> Array.length , numShapes, watch.Elapsed.TotalMilliseconds / 1000.0)
+            stats <- x :: stats
+
+            let s = sprintf "%A ; %i ; %i;  %f" candidate.path (candidate.node.Points.Value |> Array.length) numShapes (watch.Elapsed.TotalMilliseconds / 1000.0)
+            
+            File.AppendAllLines(path, [s])
+            
+            Log.line "%i: %A" numTask x
+
+
+            res
+
+        let octreeManipulator = new SequentialComputationApplicator<Octree>(octree)
+                
+        let timeoutCallback() = ()
+        let numRuns = 1
+        let numTasks = nodes |> Array.length
+        for i in 0..numRuns-1 do 
+            
+            nodes |> Array.iteri (fun index node -> 
+                let index = (i * numTasks + index)
+                octreeManipulator.Dispatch(task index node , 1000, timeoutCallback))
+ 
+
+        use app = new OpenGlApplication()
+
+        let win = app.CreateSimpleRenderWindow()
+        win.Text <- "Aardvark rocks \\o/"
+        win.Size <- V2i(100, 100)
+
+        octreeManipulator.Start()
+        win.Run()
+        octreeManipulator.Stop()
+
+
+        
+        0

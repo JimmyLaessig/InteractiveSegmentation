@@ -1,0 +1,16 @@
+﻿Aardvark.Base
+Aardvark.Base.Incremental
+Aardvark.Base.Rendering
+Aardvark.Base.FSharp
+Newtonsoft.Json
+FsPickler.Json
+FShade
+Aardvark.Rendering.NanoVg
+Aardvark.Rendering.Text
+Aardvark.SceneGraph
+Aardvark.SceneGraph.IO
+AssimpNet
+Aardvark.Git
+Aardvark.Application.WinForms.GL
+Aardvark.VRVis.Geometry
+Aardvark.VRVis.Processing
